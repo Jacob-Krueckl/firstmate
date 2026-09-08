@@ -75,10 +75,53 @@ control_lock() {
   fail 'control lock unavailable'
 }
 cleanup() {
+  trap "" HUP INT TERM
   if [ -n "$child" ]; then
     kill -TERM "$child" 2>/dev/null || true
     wait "$child" 2>/dev/null || true
   fi
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
+  trap 'exit 129' HUP
+}
+snapshot_tree() {
+  local pid=$1 ident descendant
+  ident=$(fm_pid_identity "$pid" 2>/dev/null) || return 0
+  owned_pids+=("$pid")
+  owned_identities+=("$ident")
+  while read -r descendant; do
+    [ -n "$descendant" ] || continue
+    snapshot_tree "$descendant"
+  done < <(ps -eo pid=,ppid= | awk -v parent="$pid" '$2 == parent {print $1}')
+}
+stop_terminal() {
+  local pane pane_identity i attempt alive
+  local -a owned_pids=() owned_identities=()
+  pane=$(tmux display-message -p -t "$session" '#{pane_pid}') || return 1
+  snapshot_tree "$pane"
+  pane_identity=$(fm_pid_identity "$pane" 2>/dev/null) || pane_identity=
+  terminal_matches || return 1
+  if [ -n "$pane_identity" ] && [ "${owned_identities[0]:-}" = "$pane_identity" ]; then
+    kill -TERM "$pane" 2>/dev/null || true
+  fi
+  for attempt in {1..200}; do
+    alive=0
+    for ((i=${#owned_pids[@]}-1; i>=0; i--)); do
+      if [ "$(fm_pid_identity "${owned_pids[i]}" 2>/dev/null)" = "${owned_identities[i]}" ]; then
+        alive=1
+        if [ "$attempt" -eq 100 ]; then
+          kill -TERM "${owned_pids[i]}" 2>/dev/null || true
+        fi
+      fi
+    done
+    [ "$alive" -eq 1 ] || break
+    sleep 0.1
+  done
+  [ "$alive" -eq 0 ] || { fail 'owned processes did not stop; preserving terminal'; return 1; }
+  if tmux has-session -t "$session" 2>/dev/null; then
+    terminal_matches && tmux kill-session -t "$session"
+  fi
+  return 0
 }
 queue_cutoff() { awk -F '\t' '$2+0 > n { n=$2+0 } END { print n+0 }' "$STATE/.wake-queue" 2>/dev/null; }
 pending_remains() {
@@ -189,7 +232,7 @@ case "$1" in
     read_record || { fail 'malformed owner record'; exit 1; }
     if tmux has-session -t "$session" 2>/dev/null; then
       terminal_matches || { fail 'ambiguous terminal identity; preserving'; exit 1; }
-      tmux kill-session -t "$session" || exit 1
+      stop_terminal || exit 1
     fi
     [ -s "$PENDING" ] || rm -f "$RECORD"
     rm -f "$STATE/.codex-watch-ready"
@@ -223,7 +266,16 @@ case "$1" in
     session="fm-codex-watch-$token"
     printf '%s\t%s\t%s\t%s\t%s\n' "$thread" "$parent" "$identity" "$session" "$token" > "$RECORD" || exit 1
     rm -f "$FAILURE" "$STATE/.codex-watch-ready" "$STATE/.codex-watch-arm-start"
-    command=$(printf 'exec env FM_HOME=%q %q run %q' "$FM_HOME" "$SCRIPT_DIR/fm-codex-watch.sh" "$token")
+    owner_env=(env)
+    environment_names=(CODEX_HOME PATH HOME FM_CONFIG_OVERRIDE FM_POLL FM_GUARD_GRACE FM_WATCHER_STALE_GRACE FM_ARM_CONFIRM_TIMEOUT FM_ARM_ATTACH_POLL FM_CHECK_INTERVAL FM_CHECK_TIMEOUT FM_HEARTBEAT FM_HEARTBEAT_MAX FM_SIGNAL_GRACE FM_BUSY_TURN_MAX_SECS FM_HOME_SUMMARY_INTERVAL FM_PAUSE_RESURFACE_SECS FM_SECONDMATE_WAKE_STALL_SECS FM_STALE_ESCALATE_SECS FM_TURNEND_CHURN_ABSORB_SECS FM_WEDGE_DEMAND_INSPECT_COUNT FM_EVENT_CAP_FAIL_MAX FM_WATCH_CYCLE_LOG_MAX_BYTES FM_WATCH_CYCLE_LOG_KEEP_LINES)
+    for name in "${environment_names[@]}"; do
+      owner_env+=(-u "$name")
+    done
+    for name in "${environment_names[@]}"; do
+      [ "${!name+x}" != x ] || owner_env+=("$name=${!name}")
+    done
+    printf -v command '%q ' "${owner_env[@]}" "FM_HOME=$FM_HOME" "$SCRIPT_DIR/fm-codex-watch.sh" run "$token"
+    command="exec $command"
     # Launch held behind a tmux wait channel until the exact token is installed.
     launch=$(printf 'tmux wait-for %q; %s' "$token" "$command")
     tmux new-session -d -s "$session" "$launch" || exit 1
