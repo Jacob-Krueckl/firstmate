@@ -7,17 +7,20 @@
 # is created. Pending notification is retained until its durable queue cutoff
 # disappears through the primary's normal acknowledgement. Receipt is not ack.
 # start is idempotent for an identical live binding; mismatches fail closed.
-# A dead owner can be restarted with start; an ambiguous terminal is preserved.
-# status exits nonzero for stopped/failed ownership. stop closes only the
-# recorded identity-matched terminal. run is an internal authenticated entry.
+# Stop an unhealthy remaining terminal before start; ambiguous identity refuses.
+# stop retires identity-matched owned descendants even across code-root changes.
+# Pending delivery retains its exact binding through stop; run is internal.
 # state/.codex-watch-owner is one TSV: thread, PID, kernel identity, session,
 # token. .codex-watch-ready repeats the token; .codex-watch-beat must be less
 # than 15 seconds old. .codex-watch-pending is the notified maximum sequence;
 # it survives restart, and after 900 seconds .codex-watch-overdue reports delay.
 # .codex-watch-failure refuses automatic restart when delivery is failed or
-# indeterminate. retry deliberately resubmits one native reminder, preserving
-# queue rows. .codex-watch-cycle contains the latest arm output.
-# While .afk exists the owner cancels its arm child and yields to away mode.
+# indeterminate: inspect the primary, retry, then start the same binding.
+# retry resubmits one reminder without ack; .codex-watch-cycle is latest arm output.
+# While .afk exists the owner cancels its arm child and fails normal health.
+# status also rejects stale active watchers after bounded startup grace.
+# start forwards caller transport/cadence inputs via the environment_names list,
+# clearing unset entries from tmux inheritance; restart to apply changed inputs.
 set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "${FM_HOME:-}" ] || { echo 'codex watcher: FM_HOME must be explicit' >&2; exit 2; }

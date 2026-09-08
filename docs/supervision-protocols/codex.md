@@ -8,7 +8,7 @@ When this session owns supervision and away mode is not active:
 4. Verify `bin/fm-codex-watch.sh status` before ending the turn.
 5. On `FIRSTMATE_CODEX_WAKE`, drain and handle the durable queue and acknowledge only after handling.
    The owner waits for that acknowledgement before its next notification.
-6. On owner failure, inspect its diagnostic and restore the same binding with `start`; pending records remain durable.
+6. On owner failure, inspect its diagnostic and follow the recovery contract in `bin/fm-codex-watch.sh --help` before restoring the same binding.
 7. Never run a duplicate arm, background shell watcher, or foreground checkpoint while the owner is healthy.
 
 Native `codex queue` wakes an idle retained interactive TUI; a successfully queued message to an exited `codex exec` session does not establish wake delivery.
