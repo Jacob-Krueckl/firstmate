@@ -1,0 +1,44 @@
+[
+  {
+    "timestamp": "2026-09-08T16:42:58.086Z",
+    "ordinal": 14,
+    "type": "event_msg",
+    "payload": {
+      "type": "task_complete",
+      "turn_id": "01a081e6-a9c1-71a2-bc40-6e66a27ab5a8",
+      "last_agent_message": "FM_IDLE_INITIAL",
+      "started_at": 1788885772,
+      "completed_at": 1788885778,
+      "duration_ms": 5343,
+      "time_to_first_token_ms": 5006
+    }
+  },
+  {
+    "timestamp": "2026-09-08T16:43:04.048Z",
+    "ordinal": 23,
+    "type": "event_msg",
+    "payload": {
+      "type": "task_complete",
+      "turn_id": "01a081e6-cd59-7143-ba77-a8b5998f8edd",
+      "last_agent_message": "FM_IDLE_WAKE_ONE",
+      "started_at": 1788885781,
+      "completed_at": 1788885784,
+      "duration_ms": 2195,
+      "time_to_first_token_ms": 2026
+    }
+  },
+  {
+    "timestamp": "2026-09-08T16:43:13.908Z",
+    "ordinal": 32,
+    "type": "event_msg",
+    "payload": {
+      "type": "task_complete",
+      "turn_id": "01a081e6-f470-70c1-8dc7-35ad26515827",
+      "last_agent_message": "FM_IDLE_WAKE_TWO",
+      "started_at": 1788885791,
+      "completed_at": 1788885793,
+      "duration_ms": 2049,
+      "time_to_first_token_ms": 1896
+    }
+  }
+]

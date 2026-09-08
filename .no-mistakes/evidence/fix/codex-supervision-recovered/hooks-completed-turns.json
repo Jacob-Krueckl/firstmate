@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2026-09-08T16:43:13.497Z",
+    "ordinal": 21,
+    "type": "event_msg",
+    "payload": {
+      "type": "task_complete",
+      "turn_id": "01a081e6-dbea-7071-8722-f05f70630716",
+      "last_agent_message": "FM_HOOK_COMPLETE",
+      "started_at": 1788885785,
+      "completed_at": 1788885793,
+      "duration_ms": 7903,
+      "time_to_first_token_ms": 4284
+    }
+  }
+]

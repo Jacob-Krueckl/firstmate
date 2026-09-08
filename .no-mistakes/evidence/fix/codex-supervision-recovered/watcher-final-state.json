@@ -1,0 +1,7 @@
+{
+  ".wake-queue": "",
+  ".codex-watch-pending": null,
+  ".codex-watch-failure": null,
+  ".codex-watch-cycle": "watcher: started pid=3961714 (beacon fresh)\n",
+  ".watch.lock/pid": null
+}
