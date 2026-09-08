@@ -71,8 +71,8 @@ The third is recorded below.
 Two harness-specific consequences are load-bearing rather than incidental.
 
 Codex's interactive TUI fired no project `SessionStart` hook at all in the same lab where `codex exec` fired it reliably, which matches the earlier 2026-07-28 finding for 0.145.0.
-Codex's run tier is therefore verified only for `codex exec` startup and context-preserving resume.
-The interactive TUI is a known uncovered gap: Firstmate has no tracked session-open, compaction, or re-emit channel there, ships no global hook, and does not claim instruction-refresh delivery for that surface.
+That older run-tier finding is superseded for trusted TUI startup by the 0.153.4 native-hook verification below.
+Interactive compaction and re-emit delivery remain unverified.
 
 Pi compaction was verified on 2026-08-05 with Pi 0.82.0 in the same throwaway lab after setting `.pi/settings.json` `compaction.keepRecentTokens` to 200 and completing one substantial assistant-prose turn before issuing `/compact`.
 Pi reported `Compacted from 7,697 tokens`, the recorder observed `session_compact`, and the model quoted the freshly injected `source=compact` token back.
@@ -202,6 +202,27 @@ Cursor's refresh command is `FM_CURSOR_PRIMARY_LIVE_E2E=1 tests/fm-cursor-primar
 The Ahoy first-message boundary was reverified on 2026-07-22 with Pi 0.81.1 and OpenCode 1.17.18.
 Marked current operational input and the two exact legacy compatibility shapes selected Bearings, while genuine near-miss captain messages remained real boundaries.
 The detailed reconciliation and task chronology stay in the private audit report and PR evidence.
+
+### Codex native hook routing
+
+On 2026-09-08, codex-cli 0.153.4 delivered trusted project `SessionStart`, both `PreToolUse` registrations, and `Stop` to their registered helper trees in the retained TUI.
+The launch deliberately inherited `GROK_AGENT=1`; all four helpers executed the real harness detector and returned `codex` through the native event binding.
+The second turn ran `printf HOOK_TOOL_PROBE` and completed normally after a silent Stop helper.
+Sandbox and approval defaults were retained; only the isolated, test-authored project and hooks were trusted for the invocation.
+The reusable live guard refreshes this evidence:
+
+```sh
+FM_CODEX_HOOK_LIVE_E2E=1 bash tests/fm-codex-hook-routing-live-e2e.test.sh
+```
+
+Expected result:
+
+```text
+ok - codex-cli 0.153.4 native SessionStart, PreToolUse and Stop bind Codex despite GROK_AGENT=1
+```
+
+`tests/fm-codex-hook-routing.test.sh` separately executes every native registration against a scratch root with contradictory inherited markers and verifies that ordinary marker precedence remains unchanged.
+The executable worker-launch regression in `tests/fm-spawn-dispatch-profile.test.sh` verifies that event identity does not escape to a worker.
 
 ## Semantic busy state
 
@@ -547,3 +568,29 @@ Observed output:
 ```
 
 The safe command-channel contract is covered without a notification by `tests/fm-daemon.test.sh`: the summary reaches both `$1` and stdin, every channel is process-group bounded, and a failed channel falls through.
+
+## Codex retained idle callbacks
+
+Verified on 2026-09-08 with `codex-cli 0.153.4` on Linux.
+The native queue command started two successive turns in a retained idle TUI without a new user keystroke.
+An exited `codex exec` session accepted a queue receipt but did not start another turn; a receipt alone is not delivery evidence.
+The callback therefore requires a live terminal process with an open matching CLI rollout and matching home, as enforced by `bin/fm-codex-notify.sh`.
+
+Refresh the native check with:
+
+```sh
+FM_CODEX_LIVE_E2E=1 bash tests/fm-codex-continuity-live-e2e.test.sh
+```
+
+Observed output:
+
+```text
+ok - codex-cli 0.153.4 retained TUI completed two native idle wakes; wrong home rejected
+```
+
+The guard runs an empty scratch TUI with normal sandbox and approval defaults, accepts only that scratch directory's trust prompt, verifies the binding, rejects a mismatched home, and proves two queue-to-completed-turn transitions.
+`tests/fm-codex-notify.test.sh` supplies portable negative controls for malformed identities and a real non-Codex process.
+
+The integrated retained-owner check on the same date completed two watcher-to-native-queue-to-TUI-drain-and-acknowledgement cycles at 16:04:34 UTC and 16:05:41 UTC, with automatic watcher rearming after each acknowledgement and an empty durable queue afterward.
+An explicit stop/start/status cycle also passed before that scratch owner was stopped.
+`tests/fm-codex-watch.test.sh` refreshes the deterministic lifecycle checks with real tmux ownership, including pending-record survival after a crash, failure retry, away-mode handoff, and changed-parent-lock refusal.

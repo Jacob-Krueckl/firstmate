@@ -131,9 +131,29 @@ test_no_profile_keeps_claude_profile_defaults() {
   assert_meta_profile "$HOME_DIR/state/$id.meta" claude default default
 
   launch=$(cat "$LAUNCH_LOG")
-  expected="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions --settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' \"\$('${ROOT}/bin/fm-operational-input.sh' encode launch-brief < '$HOME_DIR/data/$id/launch-brief.md')\""
+  expected="unset FM_HOOK_HARNESS; env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions --settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' \"\$('${ROOT}/bin/fm-operational-input.sh' encode launch-brief < '$HOME_DIR/data/$id/launch-brief.md')\""
   [ "$launch" = "$expected" ] || fail "no-profile claude launch did not use the canonical launch kind"$'\n'"expected: $expected"$'\n'"actual:   $launch"
   pass "no --model/--effort records defaults and types the claude launch instructions"
+}
+
+test_hook_identity_does_not_reach_worker() {
+  local rec id out launch verdict
+  id=hook-identity-aa
+  rec=$(make_spawn_case hook-identity claude "$id")
+  read_case_record "$rec"
+  out=$(FM_HOOK_HARNESS=codex run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  expect_code 0 "$?" "spawn from Codex hook failed: $out"
+  # Execute the actual emitted launch with a harmless worker that prints the
+  # inherited binding. This proves the boundary, not merely its source spelling.
+  cat > "$FAKEBIN_DIR/claude" <<'WORKER'
+#!/usr/bin/env bash
+printf 'hook=%s\n' "${FM_HOOK_HARNESS-unset}"
+WORKER
+  chmod +x "$FAKEBIN_DIR/claude"
+  launch=$(cat "$LAUNCH_LOG")
+  verdict=$(FM_HOOK_HARNESS=codex PATH="$FAKEBIN_DIR:$PATH" bash -c "$launch")
+  assert_contains "$verdict" 'hook=unset' "hook identity leaked into the worker"
+  pass "native hook identity is cleared at the executable worker launch"
 }
 
 test_non_cursor_launch_clears_inherited_cursor_markers() {
@@ -380,7 +400,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   assert_contains "$out" "spawned $id harness=custom-agent" "spawn did not report raw command harness"
   assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent default default
   launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
+  [ "$launch" = "unset FM_HOOK_HARNESS; custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
@@ -1137,6 +1157,7 @@ SH
 
 test_worker_launch_delivers_role_scope
 test_no_profile_keeps_claude_profile_defaults
+test_hook_identity_does_not_reach_worker
 test_non_cursor_launch_clears_inherited_cursor_markers
 test_relative_home_overrides_launch_with_absolute_cross_process_paths
 test_home_defaults_preserve_absolute_or_resolve_relative_paths

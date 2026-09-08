@@ -1,16 +1,16 @@
-Mode: Codex foreground checkpoint.
+Mode: Codex retained TUI callback (Linux and tmux).
 
 When this session owns supervision and away mode is not active:
-1. Drain first with `bin/fm-wake-drain.sh`.
-   After handling all emitted wakes and reconciling open decisions and unread status lines, run the exact `--ack-through` command printed as `WAKE_ACK_REQUIRED`; until then the work remains durable for idempotent re-handling after interruption.
+1. Drain with `bin/fm-wake-drain.sh`, handle the records, then execute its exact acknowledgement command.
 2. Source `__FM_X_MODE_ENV__` first when Relay is active.
-3. First cycle: run one foreground watcher checkpoint with `bin/fm-watch-checkpoint.sh --seconds "${FM_CODEX_WATCH_CHECKPOINT:-180}"`.
-4. Ordinary wake: if the command prints `signal:`, `stale:`, `check:`, or `heartbeat`, drain queued wakes, handle that wake, then start the next checkpoint.
-5. If the command prints `checkpoint:` or exits 124 with no wake, drain queued wakes anyway, process any queued user message now visible to Codex, then start the next checkpoint.
-6. Never use shell `&` or Codex background tasks for firstmate watcher supervision.
-7. Do not run `bin/fm-watch-arm.sh` as Codex's normal supervision command.
-   If it is ever shelled anyway, a backgrounded, piped, or bundled anti-pattern is denied automatically by the PreToolUse seatbelt (`bin/fm-arm-pretool-check.sh`) registered in `.codex/hooks.json`.
-8. Failure or missing cycle only: drain queued wakes, inspect the failure, then start a fresh foreground checkpoint.
+3. Start the retained owner with explicit `FM_HOME` and `bin/fm-codex-watch.sh start THREAD PID`, using this interactive session's UUID and the PID holding this home's session lock.
+   The helper verifies the live TUI's open rollout and creates an identity-bound tmux process owner.
+4. Verify `bin/fm-codex-watch.sh status` before ending the turn.
+5. On `FIRSTMATE_CODEX_WAKE`, drain and handle the durable queue and acknowledge only after handling.
+   The owner waits for that acknowledgement before its next notification.
+6. On owner failure, inspect its diagnostic and restore the same binding with `start`; pending records remain durable.
+7. Never run a duplicate arm, background shell watcher, or foreground checkpoint while the owner is healthy.
 
-Codex cannot reason while a foreground tool call is running.
-The bounded checkpoint returns control regularly so user messages and queued wakes can be handled without relying on background-task wake semantics.
+Native `codex queue` wakes an idle retained interactive TUI; a successfully queued message to an exited `codex exec` session does not establish wake delivery.
+The owner lifecycle and callback validation are defined by `bin/fm-codex-watch.sh` and `bin/fm-codex-notify.sh`.
+On a platform without the validated transport, a foreground `bin/fm-watch-checkpoint.sh` remains a bounded diagnostic or attended fallback, not continuous supervision after the turn ends.

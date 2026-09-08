@@ -189,6 +189,13 @@ allow_supervised_stop() {
   exit 2
 }
 
+# The retained Codex owner waits for acknowledgement between watcher cycles.
+# Its exact session/terminal identity and own heartbeat cover that handoff.
+if [ "$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null)" = codex ] &&
+   FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-codex-watch.sh" status >/dev/null 2>&1; then
+  allow_supervised_stop
+fi
+
 if fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   allow_supervised_stop
 fi

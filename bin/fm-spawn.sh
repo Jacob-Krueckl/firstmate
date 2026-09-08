@@ -3861,6 +3861,9 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   fi
   LAUNCH="$LAUNCH_ENV_PREFIX /bin/sh -c $(shell_quote "$LAUNCH")"
 fi
+# A native hook binding belongs only to the event handling tree, including
+# startup helpers. Clear it in the worker shell even for compound raw launches.
+LAUNCH="unset FM_HOOK_HARNESS; $LAUNCH"
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3

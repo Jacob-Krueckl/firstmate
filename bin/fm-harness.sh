@@ -18,7 +18,10 @@
 # harness only, no model/effort. Only the first non-empty, non-comment line is parsed.
 # Model/effort come ONLY from this file - config/crew-harness stays a bare adapter
 # name and is never parsed for a model.
-# Detection layers: verified environment markers first, then process ancestry.
+# Detection layers: native hook event binding, verified environment markers, then ancestry.
+# FM_HOOK_HARNESS=codex is set only by the native Codex hook registration for
+# the invoked helper tree. It is not a primary preference or launch marker;
+# fm-spawn removes it before launching any worker.
 # Record each newly verified env marker here.
 set -u
 
@@ -33,6 +36,9 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-gemini-lib.sh"
 
 detect_own() {
+  # A native registration knows which host delivered THIS event. Unlike the
+  # ambient GROK_AGENT marker it cannot be left over from the launching shell.
+  [ "${FM_HOOK_HARNESS:-}" = codex ] && { echo codex; return; }
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
   # Claude, Pi, Grok, and Cursor set verified markers of their own; codex,
