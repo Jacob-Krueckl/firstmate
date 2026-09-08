@@ -50,11 +50,22 @@ terminal_alive() {
   terminal_matches &&
     [ "$(tmux display-message -p -t "$session" '#{pane_dead}' 2>/dev/null)" = 0 ]
 }
+active_cycle_healthy() {
+  fm_watcher_healthy "$STATE" "$SCRIPT_DIR/fm-watch.sh" "${FM_GUARD_GRACE:-$(fm_poll_derived_grace)}" "$FM_HOME" ||
+    [ "$(fm_path_age "$STATE/.codex-watch-arm-start")" -lt 10 ]
+}
 healthy() {
-  parent_alive && terminal_alive &&
+  [ ! -e "$STATE/.afk" ] && parent_alive && terminal_alive &&
     [ "$(cat "$STATE/.codex-watch-ready" 2>/dev/null)" = "$token" ] &&
     [ "$(fm_path_age "$STATE/.codex-watch-beat")" -lt 15 ] &&
-    [ ! -s "$FAILURE" ]
+    [ ! -s "$FAILURE" ] || return 1
+  if [ -s "$PENDING" ]; then
+    local pending_cutoff
+    read -r pending_cutoff < "$PENDING"
+    [[ "$pending_cutoff" =~ ^[0-9]+$ ]] && return 0
+    return 1
+  fi
+  active_cycle_healthy
 }
 control_lock() {
   local attempt
@@ -83,7 +94,7 @@ run_owner() {
   trap 'exit 130' INT
   trap 'exit 129' HUP
   printf '%s\n' "$token" > "$STATE/.codex-watch-ready"
-  local cutoff arm_rc age away_interrupted
+  local cutoff arm_rc age away_interrupted unhealthy_since now
   while parent_alive; do
     touch "$STATE/.codex-watch-beat"
     if [ -e "$STATE/.afk" ]; then sleep 1; continue; fi
@@ -99,9 +110,12 @@ run_owner() {
       fi
       rm -f "$PENDING" "$STATE/.codex-watch-overdue"
     fi
+    touch "$STATE/.codex-watch-arm-start"
     "$SCRIPT_DIR/fm-watch-arm.sh" > "$STATE/.codex-watch-cycle" 2>&1 &
     child=$!
     away_interrupted=0
+    arm_rc=0
+    unhealthy_since=0
     while kill -0 "$child" 2>/dev/null; do
       parent_alive || return 1
       if [ -e "$STATE/.afk" ]; then
@@ -110,11 +124,21 @@ run_owner() {
         away_interrupted=1
         break
       fi
+      if active_cycle_healthy; then
+        unhealthy_since=0
+      else
+        now=$(date +%s)
+        [ "$unhealthy_since" -ne 0 ] || unhealthy_since=$now
+        if [ "$((now - unhealthy_since))" -ge 10 ]; then
+          arm_rc=1
+          cleanup
+          break
+        fi
+      fi
       touch "$STATE/.codex-watch-beat"
       sleep 1
     done
     [ "$away_interrupted" -eq 0 ] || continue
-    arm_rc=0
     wait "$child" || arm_rc=$?
     child=
     parent_alive || return 1
@@ -167,7 +191,8 @@ case "$1" in
       terminal_matches || { fail 'ambiguous terminal identity; preserving'; exit 1; }
       tmux kill-session -t "$session" || exit 1
     fi
-    rm -f "$RECORD" "$STATE/.codex-watch-ready"
+    [ -s "$PENDING" ] || rm -f "$RECORD"
+    rm -f "$STATE/.codex-watch-ready"
     echo 'codex watcher: stopped (durable pending wakes preserved)'
     ;;
   start)
@@ -178,6 +203,11 @@ case "$1" in
     "$SCRIPT_DIR/fm-codex-notify.sh" --validate "$want_thread" "$want_parent" "$FM_HOME" || exit 1
     if [ -e "$RECORD" ]; then
       read_record || { fail 'malformed owner record'; exit 1; }
+      if [ -s "$PENDING" ]; then
+        if [ "$thread" != "$want_thread" ] || [ "$parent" != "$want_parent" ] || ! parent_alive; then
+          fail 'pending delivery belongs to another binding'; exit 1
+        fi
+      fi
       if healthy; then
         [ "$thread" = "$want_thread" ] && [ "$parent" = "$want_parent" ] || { fail 'another binding owns supervision'; exit 1; }
         echo "codex watcher: attached thread=$thread session=$session"; exit 0
@@ -192,7 +222,7 @@ case "$1" in
     token="$$-$RANDOM-$(date +%s)"
     session="fm-codex-watch-$token"
     printf '%s\t%s\t%s\t%s\t%s\n' "$thread" "$parent" "$identity" "$session" "$token" > "$RECORD" || exit 1
-    rm -f "$FAILURE" "$STATE/.codex-watch-ready"
+    rm -f "$FAILURE" "$STATE/.codex-watch-ready" "$STATE/.codex-watch-arm-start"
     command=$(printf 'exec env FM_HOME=%q %q run %q' "$FM_HOME" "$SCRIPT_DIR/fm-codex-watch.sh" "$token")
     # Launch held behind a tmux wait channel until the exact token is installed.
     launch=$(printf 'tmux wait-for %q; %s' "$token" "$command")
